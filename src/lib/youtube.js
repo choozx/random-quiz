@@ -13,6 +13,7 @@ export function parsePlaylistId(input) {
 }
 
 const API = 'https://www.googleapis.com/youtube/v3/playlistItems'
+const VIDEOS_API = 'https://www.googleapis.com/youtube/v3/videos'
 
 // 재생목록의 모든 곡을 [{ id, title }] 로 반환. 비공개/삭제된 영상은 제외.
 export async function fetchPlaylistSongs(apiKey, playlistId) {
@@ -51,4 +52,26 @@ export async function fetchPlaylistSongs(apiKey, playlistId) {
   } while (pageToken)
 
   return songs
+}
+
+// 50개씩 videos.list 로 status.embeddable 확인 → 재생 가능한 곡만 반환.
+// onProgress(checked, total) 콜백으로 진행 상황 전달.
+export async function filterEmbeddableSongs(apiKey, songs, onProgress) {
+  const result = []
+  for (let i = 0; i < songs.length; i += 50) {
+    const batch = songs.slice(i, i + 50)
+    const ids = batch.map((s) => s.id).join(',')
+    const params = new URLSearchParams({ part: 'status', id: ids, key: apiKey })
+    const res = await fetch(`${VIDEOS_API}?${params}`)
+    const data = await res.json()
+    if (!res.ok) throw new Error(data?.error?.message || `HTTP ${res.status}`)
+    const okIds = new Set(
+      (data.items || [])
+        .filter((item) => item.status?.embeddable)
+        .map((item) => item.id),
+    )
+    result.push(...batch.filter((s) => okIds.has(s.id)))
+    onProgress?.(Math.min(i + 50, songs.length), songs.length)
+  }
+  return result
 }

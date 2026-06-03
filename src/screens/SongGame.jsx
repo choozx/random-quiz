@@ -2,14 +2,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getSongs, getSongStats, setSongStats } from '../lib/storage'
 import { useYouTubePlayer } from '../hooks/useYouTubePlayer'
 
-const TOTAL_ROUNDS = 10
-const LISTEN_MS = 1000 // 정확히 1초
+const DEFAULT_ROUNDS = 10
+const START_SECONDS = 30
+
+const DURATIONS = [
+  { ms: 1000,    label: '1초' },
+  { ms: 5000,    label: '5초' },
+  { ms: Infinity, label: '전체' },
+]
 
 // YT.PlayerState 숫자 상수
 const ENDED = 0
 const PLAYING = 1
 const PAUSED = 2
 const CUED = 5
+const CUE_RETRY_MS = 4000 // CUED 이벤트 미수신 시 재시도 간격
 
 function shuffle(arr) {
   const a = [...arr]
@@ -33,13 +40,17 @@ function buildChoices(target, songs) {
   return shuffle([target, ...others])
 }
 
-export default function SongGame({ go }) {
+export default function SongGame({ go, options = {} }) {
+  const ROUNDS = options.rounds ?? DEFAULT_ROUNDS
   const songs = useMemo(() => getSongs(), [])
   const order = useRef(shuffle(songs)) // 곡 출제 순서 큐
   const orderIdx = useRef(0)
-  const roundRef = useRef(null) // { id, start, midSet, timer }
+  const roundRef = useRef(null) // { id, start, timer, retryTimer, no }
+  const startRoundRef = useRef(null)
 
-  const [roundNo, setRoundNo] = useState(0) // 1..TOTAL_ROUNDS
+  const [roundNo, setRoundNo] = useState(0)
+  const [playDuration, setPlayDuration] = useState(1000)
+  const playDurationRef = useRef(1000)
   const [target, setTarget] = useState(null)
   const [choices, setChoices] = useState([])
   const [phase, setPhase] = useState('init') // init|loading|ready|playing|answer|revealed
@@ -61,36 +72,31 @@ export default function SongGame({ go }) {
     const player = e.target
 
     if (e.data === CUED) {
-      if (!r.midSet) {
-        const dur = player.getDuration?.() || 0
-        const start = dur > 6 ? Math.min(dur * 0.3, dur - 3) : 0
-        r.midSet = true
-        r.start = start
-        if (start > 0) {
-          // 가운데 지점으로 다시 cue → 그 지점을 미리 버퍼링
-          player.cueVideoById({ videoId: r.id, startSeconds: start })
-          return
-        }
-      }
+      clearTimeout(r.retryTimer)
+      r.retryTimer = null
+      r.cued = true
       setPhase('ready')
     } else if (e.data === PLAYING) {
-      if (!r.timer) {
+      if (!r.timer && playDurationRef.current !== Infinity) {
         r.timer = setTimeout(() => {
-          try {
-            player.pauseVideo()
-          } catch {
-            // ignore
-          }
+          try { player.pauseVideo() } catch {}
           r.timer = null
-        }, LISTEN_MS)
+        }, playDurationRef.current)
       }
     } else if (e.data === PAUSED || e.data === ENDED) {
       setPhase((p) => (p === 'revealed' ? p : 'answer'))
     }
   }, [])
 
+  const onError = useCallback(() => {
+    // 임베딩 차단(101/150), 영상 없음(100) 등 → 같은 라운드 번호로 다음 곡 시도
+    const n = roundRef.current?.no ?? 1
+    startRoundRef.current?.(n)
+  }, [])
+
   const { containerRef, playerRef, ready } = useYouTubePlayer({
     onStateChange: onState,
+    onError,
   })
 
   // 한 라운드 준비
@@ -99,36 +105,59 @@ export default function SongGame({ go }) {
       const t = nextSong()
       const r = roundRef.current
       if (r?.timer) clearTimeout(r.timer)
-      roundRef.current = { id: t.id, start: 0, midSet: false, timer: null }
+      if (r?.retryTimer) clearTimeout(r.retryTimer)
+      const round = { id: t.id, start: START_SECONDS, timer: null, retryTimer: null, cued: false, no: n }
+      roundRef.current = round
       setTarget(t)
       setChoices(buildChoices(t, songs))
       setSelected(null)
       setRoundNo(n)
       setPhase('loading')
-      try {
-        playerRef.current?.cueVideoById(t.id)
-      } catch {
-        // ignore
+
+      function cueVideo() {
+        if (roundRef.current !== round) return
+        try {
+          // startSeconds 없이 큐 → 빠른 CUED 이벤트, 실제 seek는 listen()에서
+          playerRef.current?.cueVideoById(round.id)
+        } catch {
+          // ignore
+        }
+        // CUED가 오지 않으면 1회 재시도 (반복 X → 버퍼링 방해 금지)
+        round.retryTimer = setTimeout(() => {
+          if (roundRef.current === round && !round.cued) {
+            try { playerRef.current?.cueVideoById(round.id) } catch {}
+          }
+        }, CUE_RETRY_MS)
       }
+      cueVideo()
     },
     [nextSong, songs, playerRef],
   )
+
+  startRoundRef.current = startRound
 
   // 플레이어 준비되면 첫 라운드 시작
   useEffect(() => {
     if (ready && phase === 'init') startRound(1)
   }, [ready, phase, startRound])
 
-  // 1초 듣기 (첫 재생 + 다시 듣기 공용)
-  function listen() {
+  function listen(ms) {
     const r = roundRef.current
     if (!r) return
+    // 같은 길이 재생 중 → 정지
+    if (phase === 'playing' && playDurationRef.current === ms) {
+      if (r.timer) { clearTimeout(r.timer); r.timer = null }
+      try { playerRef.current.pauseVideo() } catch {}
+      return
+    }
+    // 다른 길이 or 정지 상태 → 처음부터 재생
+    if (r.timer) { clearTimeout(r.timer); r.timer = null }
+    playDurationRef.current = ms
+    setPlayDuration(ms)
     try {
       playerRef.current.seekTo(r.start || 0, true)
       playerRef.current.playVideo()
-    } catch {
-      // ignore
-    }
+    } catch {}
     setPhase('playing')
   }
 
@@ -150,13 +179,13 @@ export default function SongGame({ go }) {
   }
 
   function next() {
-    if (roundNo >= TOTAL_ROUNDS) {
+    if (roundNo >= ROUNDS) {
       // 게임 종료 → 기록 저장
       const stats = getSongStats()
       setSongStats({
         games: stats.games + 1,
         totalCorrect: stats.totalCorrect + score,
-        totalRounds: stats.totalRounds + TOTAL_ROUNDS,
+        totalRounds: stats.totalRounds + ROUNDS,
         best: Math.max(stats.best, score),
       })
       setDone(true)
@@ -171,7 +200,7 @@ export default function SongGame({ go }) {
       <div className="flex-1 flex flex-col items-center justify-center text-center gap-6">
         <h2 className="text-3xl font-bold">게임 종료!</h2>
         <p className="text-5xl font-bold text-violet-400">
-          {score} / {TOTAL_ROUNDS}
+          {score} / {ROUNDS}
         </p>
         <div className="flex flex-col gap-3 w-full max-w-xs">
           <button
@@ -212,27 +241,35 @@ export default function SongGame({ go }) {
           ← 그만두기
         </button>
         <span className="text-neutral-400">
-          {roundNo || 1} / {TOTAL_ROUNDS}
+          {roundNo || 1} / {ROUNDS}
         </span>
         <span className="font-semibold text-violet-400">점수 {score}</span>
       </div>
+
 
       <div className="flex-1 flex flex-col items-center justify-center gap-8">
         {!ready || phase === 'loading' ? (
           <p className="text-neutral-400">불러오는 중…</p>
         ) : (
           <>
-            <button
-              onClick={listen}
-              disabled={phase === 'playing'}
-              className="w-40 h-40 rounded-full bg-violet-600 hover:bg-violet-500 disabled:bg-neutral-700 text-2xl font-bold flex items-center justify-center transition shadow-lg shadow-violet-900/40"
-            >
-              {phase === 'playing'
-                ? '🔊'
-                : phase === 'ready'
-                  ? '▶ 1초'
-                  : '↻ 다시'}
-            </button>
+            <div className="flex gap-3 w-full">
+              {DURATIONS.map(({ ms, label }) => {
+                const isActive = phase === 'playing' && playDuration === ms
+                return (
+                  <button
+                    key={label}
+                    onClick={() => listen(ms)}
+                    className={`flex-1 py-4 rounded-2xl text-base font-bold transition ${
+                      isActive
+                        ? 'bg-violet-500 text-white shadow-lg shadow-violet-900/40'
+                        : 'bg-violet-600 hover:bg-violet-500'
+                    }`}
+                  >
+                    {isActive ? '⏹ 정지' : `▶ ${label}`}
+                  </button>
+                )
+              })}
+            </div>
 
             {(phase === 'answer' || phase === 'revealed') && (
               <div className="w-full grid grid-cols-1 gap-3">
@@ -276,9 +313,10 @@ export default function SongGame({ go }) {
           onClick={next}
           className="w-full py-4 rounded-2xl bg-violet-600 hover:bg-violet-500 font-semibold text-lg transition"
         >
-          {roundNo >= TOTAL_ROUNDS ? '결과 보기' : '다음 곡 →'}
+          {roundNo >= ROUNDS ? '결과 보기' : '다음 곡 →'}
         </button>
       )}
     </div>
   )
 }
+

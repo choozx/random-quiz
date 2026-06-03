@@ -14,7 +14,7 @@ export default function Home({ go, library }) {
 
       <div className="w-full flex flex-col gap-3">
         <button
-          onClick={() => go('song')}
+          onClick={() => go('modeselect')}
           disabled={!ready}
           className="w-full py-4 rounded-2xl bg-violet-600 hover:bg-violet-500 disabled:bg-neutral-800 disabled:text-neutral-500 font-semibold text-lg transition"
         >

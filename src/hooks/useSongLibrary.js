@@ -7,13 +7,14 @@ import {
   getSongsSource,
   setSongsSource,
 } from '../lib/storage'
-import { parsePlaylistId, fetchPlaylistSongs } from '../lib/youtube'
+import { parsePlaylistId, fetchPlaylistSongs, filterEmbeddableSongs } from '../lib/youtube'
 
 // 곡 목록을 관리한다.
 // 시작할 때 설정값(.env.local 또는 브라우저 저장값)으로 자동 로드하고,
 // 이미 같은 재생목록으로 캐시돼 있으면 다시 부르지 않는다.
 export function useSongLibrary() {
   const [loading, setLoading] = useState(false)
+  const [loadingMsg, setLoadingMsg] = useState('')
   const [error, setError] = useState(null)
   const [version, setVersion] = useState(0) // 곡 목록이 바뀌면 증가 → 화면 갱신
 
@@ -31,16 +32,24 @@ export function useSongLibrary() {
     setLoading(true)
     setError(null)
     try {
-      const songs = await fetchPlaylistSongs(key, id)
+      setLoadingMsg('재생목록 불러오는 중…')
+      const all = await fetchPlaylistSongs(key, id)
+
+      setLoadingMsg(`재생 가능 여부 확인 중… (0 / ${all.length})`)
+      const songs = await filterEmbeddableSongs(key, all, (checked, total) => {
+        setLoadingMsg(`재생 가능 여부 확인 중… (${checked} / ${total})`)
+      })
+
       setSongs(songs)
       setSongsSource(id)
       setVersion((v) => v + 1)
-      return { ok: true, count: songs.length }
+      return { ok: true, count: songs.length, total: all.length }
     } catch (e) {
       setError(e.message)
       return { ok: false, reason: e.message }
     } finally {
       setLoading(false)
+      setLoadingMsg('')
     }
   }, [])
 
@@ -48,5 +57,5 @@ export function useSongLibrary() {
     refresh(false)
   }, [refresh])
 
-  return { loading, error, version, refresh }
+  return { loading, loadingMsg, error, version, refresh }
 }

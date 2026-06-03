@@ -22,16 +22,15 @@ function loadIframeApi() {
 }
 
 // 숨겨진 유튜브 플레이어를 생성한다.
-// onStateChange 콜백은 ref로 보관해 최신 함수를 항상 사용한다.
-export function useYouTubePlayer({ onStateChange }) {
+// onStateChange / onError 콜백은 ref로 보관해 최신 함수를 항상 사용한다.
+export function useYouTubePlayer({ onStateChange, onError }) {
   const containerRef = useRef(null)
   const playerRef = useRef(null)
   const stateCb = useRef(onStateChange)
+  const errorCb = useRef(onError)
   const [ready, setReady] = useState(false)
-
-  useEffect(() => {
-    stateCb.current = onStateChange
-  }, [onStateChange])
+  useEffect(() => { stateCb.current = onStateChange }, [onStateChange])
+  useEffect(() => { errorCb.current = onError }, [onError])
 
   useEffect(() => {
     let cancelled = false
@@ -55,6 +54,9 @@ export function useYouTubePlayer({ onStateChange }) {
           },
           onStateChange: (e) => {
             if (stateCb.current) stateCb.current(e)
+          },
+          onError: (e) => {
+            if (errorCb.current) errorCb.current(e)
           },
         },
       })

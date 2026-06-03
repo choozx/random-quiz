@@ -24,7 +24,9 @@ export default function Settings({ go, library }) {
     const result = await library.refresh(true)
     if (result.ok) {
       setSongList(getSongs())
-      setMsg({ type: 'ok', text: `${result.count}곡을 불러왔어요!` })
+      const skipped = result.total != null ? result.total - result.count : 0
+      const skipNote = skipped > 0 ? ` (${skipped}곡 임베딩 불가로 제외)` : ''
+      setMsg({ type: 'ok', text: `${result.count}곡을 불러왔어요!${skipNote}` })
     } else if (result.reason === 'no-config') {
       setMsg({ type: 'err', text: 'API 키와 재생목록을 모두 입력하세요.' })
     } else {
@@ -90,7 +92,7 @@ export default function Settings({ go, library }) {
         disabled={!apiKey.trim() || !playlist.trim() || library.loading}
         className="py-3 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:bg-neutral-800 disabled:text-neutral-500 font-semibold transition"
       >
-        {library.loading ? '불러오는 중…' : '곡 불러오기 / 새로고침'}
+        {library.loading ? (library.loadingMsg || '불러오는 중…') : '곡 불러오기 / 새로고침'}
       </button>
 
       {msg && (
