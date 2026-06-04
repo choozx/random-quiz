@@ -459,8 +459,8 @@ function RandomReveal({ assignment, teamNames, teamCount, rosterMap, onFinish, o
   }
 
   // ── 축구장 입장 터널 지오메트리 ──
-  const HW = 300 // 복도 절반 너비(px)
-  const HH = 190 // 복도 절반 높이(px)
+  const HW = 450 // 복도 절반 너비(px)
+  const HH = 285 // 복도 절반 높이(px)
   const Z_NEAR = 500 // 입구 뒤쪽 여유 길이
   const tunnelLen = Z_NEAR + lastIdx * TUNNEL_SPACING + 1200 // 복도 전체 길이
   const wallShift = tunnelLen / 2 - Z_NEAR // 평면 중심을 복도 중앙으로 보내는 이동량
@@ -527,8 +527,8 @@ function RandomReveal({ assignment, teamNames, teamCount, rosterMap, onFinish, o
       {/* 터널 무대 — 클릭하면 다음 단계. 힌트들이 터널 안에 일렬로 서 있고 카메라가 카드까지 걸어 들어간다 */}
       <div
         onClick={advance}
-        className="relative w-full aspect-square sm:aspect-video rounded-3xl overflow-hidden bg-neutral-950 border border-neutral-800 cursor-pointer select-none"
-        style={{ perspective: '700px' }}
+        className="relative w-[150%] -mx-[25%] aspect-square sm:aspect-video rounded-3xl overflow-hidden bg-neutral-950 border border-neutral-800 cursor-pointer select-none"
+        style={{ perspective: '1050px' }}
       >
         {/* key=idx: 다음 사람으로 넘어가면 터널 입구에서 새로 시작 */}
         <div
@@ -638,16 +638,16 @@ function RandomReveal({ assignment, teamNames, teamCount, rosterMap, onFinish, o
     if (name === 'team') {
       return (
         <div>
-          <p className="text-sm text-neutral-400 mb-2">다음 멤버가 합류할 팀은…</p>
-          <h2 className={`text-4xl font-bold ${tColor.text}`}>{teamNames[cur.teamIdx]}</h2>
+          <p className="text-base text-neutral-400 mb-2">다음 멤버가 합류할 팀은…</p>
+          <h2 className={`text-6xl font-bold ${tColor.text}`}>{teamNames[cur.teamIdx]}</h2>
         </div>
       )
     }
     if (name === 'age') {
       return (
         <div>
-          <p className="text-sm text-neutral-600 mb-2">시즌</p>
-          <h2 className="text-3xl font-bold text-neutral-900">
+          <p className="text-base text-neutral-600 mb-2">시즌</p>
+          <h2 className="text-5xl font-bold text-neutral-900">
             {Math.floor((player.birthYear % 100) / 10)}x&rsquo;s
           </h2>
         </div>
@@ -656,8 +656,8 @@ function RandomReveal({ assignment, teamNames, teamCount, rosterMap, onFinish, o
     if (name === 'nickname') {
       return (
         <div>
-          <p className="text-sm text-neutral-600 mb-2">별명</p>
-          <h2 className="text-3xl font-bold text-neutral-900">“{player.nickname}”</h2>
+          <p className="text-base text-neutral-600 mb-2">별명</p>
+          <h2 className="text-5xl font-bold text-neutral-900">"{player.nickname}"</h2>
         </div>
       )
     }
@@ -667,7 +667,7 @@ function RandomReveal({ assignment, teamNames, teamCount, rosterMap, onFinish, o
         <img
           src={player.photo}
           alt=""
-          className="h-52 object-contain"
+          className="h-[312px] object-contain"
           style={{ filter: 'brightness(0)' }}
         />
       )
@@ -678,15 +678,15 @@ function RandomReveal({ assignment, teamNames, teamCount, rosterMap, onFinish, o
         {/* 빛 폭발 — 카메라가 카드 앞에 도착한 순간 */}
         {arrived && (
           <div
-            className="card-burst absolute inset-0 m-auto w-40 h-40 rounded-full pointer-events-none"
+            className="card-burst absolute inset-0 m-auto w-60 h-60 rounded-full pointer-events-none"
             style={{ background: `radial-gradient(circle, ${isLegend ? '#fbbf24' : '#ffffff'} 0%, transparent 70%)` }}
           />
         )}
         {CARD_FRAME ? (
                 /* 피파 스타일 카드 프레임 합성 */
                 <div
-                  className="relative w-64 aspect-square mx-auto"
-                  style={{ filter: `drop-shadow(0 0 20px ${isLegend ? '#fbbf24aa' : tColor.hex + '88'})` }}
+                  className="relative w-96 aspect-square mx-auto"
+                  style={{ filter: `drop-shadow(0 0 30px ${isLegend ? '#fbbf24aa' : tColor.hex + '88'})` }}
                 >
                   <img src={CARD_FRAME} alt="" className="absolute inset-0 w-full h-full object-contain pointer-events-none" />
                   {player?.photo ? (
@@ -704,47 +704,31 @@ function RandomReveal({ assignment, teamNames, teamCount, rosterMap, onFinish, o
                       {cur.name[0]}
                     </div>
                   )}
-                  {player?.ovr && (
-                    <span
-                      className="absolute text-2xl font-bold"
-                      style={{ ...FRAME_LAYOUT.ovr, color: '#ffe9a8', textShadow: '0 1px 4px rgba(0,0,0,.85)' }}
-                    >
-                      {player.ovr}
-                    </span>
-                  )}
                   <div className="absolute inset-x-0 text-center" style={{ top: FRAME_LAYOUT.nameTop }}>
-                    <p className="text-xl font-bold text-white" style={{ textShadow: '0 1px 6px rgba(0,0,0,.9)' }}>
+                    <p className="text-2xl font-bold text-white" style={{ textShadow: '0 1px 6px rgba(0,0,0,.9)' }}>
                       {cur.name}
                     </p>
-                    <p className={`text-sm font-semibold ${tColor.text}`} style={{ textShadow: '0 1px 4px rgba(0,0,0,.9)' }}>
-                      {teamNames[cur.teamIdx]}{player ? ` · ${player.grade}` : ''}
+                    <p className={`text-base font-semibold ${tColor.text}`} style={{ textShadow: '0 1px 4px rgba(0,0,0,.9)' }}>
+                      {teamNames[cur.teamIdx]}
                     </p>
                   </div>
                 </div>
               ) : (
                 /* 프레임 이미지가 없을 때의 기본 카드 */
                 <div
-                  className="relative w-52 mx-auto rounded-2xl overflow-hidden border-2 bg-neutral-900"
-                  style={{ borderColor: grade.hex, boxShadow: `0 0 36px ${isLegend ? '#fbbf2466' : tColor.hex + '55'}` }}
+                  className="relative w-[312px] mx-auto rounded-2xl overflow-hidden border-2 bg-neutral-900"
+                  style={{ borderColor: grade.hex, boxShadow: `0 0 54px ${isLegend ? '#fbbf2466' : tColor.hex + '55'}` }}
                 >
                   {player?.photo ? (
-                    <img src={player.photo} alt="" className="w-full h-52 object-cover" />
+                    <img src={player.photo} alt="" className="w-full h-[312px] object-cover" />
                   ) : (
-                    <div className="w-full h-32 flex items-center justify-center text-5xl font-bold text-neutral-600">
+                    <div className="w-full h-48 flex items-center justify-center text-7xl font-bold text-neutral-600">
                       {cur.name[0]}
                     </div>
                   )}
                   <div className="p-3 text-left" style={{ background: `linear-gradient(160deg, ${tColor.hex}33, transparent)` }}>
-                    <div className="flex items-end justify-between gap-2">
-                      <span className="text-lg font-bold text-neutral-50">{cur.name}</span>
-                      {player?.ovr && (
-                        <span className="text-2xl font-bold" style={{ color: grade.hex }}>{player.ovr}</span>
-                      )}
-                    </div>
-                    <div className="flex justify-between text-xs mt-1">
-                      <span className={tColor.text}>{teamNames[cur.teamIdx]}</span>
-                      {player && <span style={{ color: grade.hex }}>{player.grade}</span>}
-                    </div>
+                    <span className="text-xl font-bold text-neutral-50">{cur.name}</span>
+                    <p className={`text-xs mt-1 ${tColor.text}`}>{teamNames[cur.teamIdx]}</p>
                   </div>
                 </div>
               )}
