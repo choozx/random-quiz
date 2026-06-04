@@ -70,7 +70,6 @@ function fireFanfare() {
 function buildStages(p) {
   if (!p) return ['team', 'card']
   const stages = ['team']
-  if (p.region) stages.push('region')
   if (p.birthYear) stages.push('age')
   if (p.nickname) stages.push('nickname')
   if (p.photo) stages.push('silhouette')
@@ -644,20 +643,12 @@ function RandomReveal({ assignment, teamNames, teamCount, rosterMap, onFinish, o
         </div>
       )
     }
-    if (name === 'region') {
-      return (
-        <div>
-          <p className="text-sm text-neutral-600 mb-2">출신</p>
-          <h2 className="text-3xl font-bold text-neutral-900">{player.region}</h2>
-        </div>
-      )
-    }
     if (name === 'age') {
       return (
         <div>
-          <p className="text-sm text-neutral-600 mb-2">나이</p>
+          <p className="text-sm text-neutral-600 mb-2">시즌</p>
           <h2 className="text-3xl font-bold text-neutral-900">
-            {Math.floor((player.birthYear % 100) / 10)}X년생
+            {Math.floor((player.birthYear % 100) / 10)}x&rsquo;s
           </h2>
         </div>
       )
