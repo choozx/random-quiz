@@ -31,7 +31,7 @@ export default function Home({ go, library }) {
           이미지 게임 시작
         </button>
         <button
-          onClick={() => go('tournamentsetup')}
+          onClick={() => go('teamsetup')}
           disabled={!ready && !imageReady}
           className="w-full py-4 rounded-2xl bg-amber-600 hover:bg-amber-500 disabled:bg-neutral-800 disabled:text-neutral-500 font-semibold text-lg transition"
         >

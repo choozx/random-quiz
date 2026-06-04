@@ -38,6 +38,10 @@ export const setSongs = (songs) => write('songs', songs)
 export const getSongsSource = () => read('songsSource', '')
 export const setSongsSource = (id) => write('songsSource', id)
 
+// --- 참가자 명단 (라운드전 팀 구성용) ---
+export const getPlayers = () => read('players', [])
+export const setPlayers = (v) => write('players', v)
+
 // --- 노래 게임 누적 기록 ---
 // { games, totalCorrect, totalRounds, best } (best = 한 판 최고 정답수)
 export const getSongStats = () =>

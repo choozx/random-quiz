@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { getSongs } from '../lib/storage'
 import { IMAGES, getCategories } from '../lib/images'
+import { teamColor } from '../lib/teams'
 
 const COUNT_OPTIONS = [3, 5, 7, 10, 15, 20]
 const MAX_STAGES = 6
 
-export default function TournamentSetup({ go }) {
+export default function TournamentSetup({ go, options = {} }) {
   const songs = getSongs()
   const categories = getCategories()
 
@@ -65,6 +66,26 @@ export default function TournamentSetup({ go }) {
   return (
     <div className="flex-1 flex flex-col gap-6 py-4">
       <h2 className="text-2xl font-bold text-center">🏆 라운드전 구성</h2>
+
+      {options.teams?.length > 0 && (
+        <div className="flex flex-wrap items-center justify-center gap-2 text-sm">
+          {options.teams.map((t, i) => (
+            <span
+              key={i}
+              className={`px-3 py-1 rounded-xl bg-neutral-900 border border-neutral-700 ${teamColor(t.colorIdx).text}`}
+              title={t.members.join(', ')}
+            >
+              {t.name} ({t.members.length}명)
+            </span>
+          ))}
+          <button
+            onClick={() => go('teamsetup')}
+            className="text-neutral-500 hover:text-neutral-300 text-xs underline underline-offset-2 transition"
+          >
+            팀 다시 구성
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-col gap-3">
         {stages.map((s, i) => {

@@ -2,6 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getSongs } from '../lib/storage'
 import { getImagesByCategory } from '../lib/images'
 import { useYouTubePlayer } from '../hooks/useYouTubePlayer'
+import { teamColor } from '../lib/teams'
+
+const DEFAULT_TEAMS = [
+  { name: 'Player 1', colorIdx: 0, members: [] },
+  { name: 'Player 2', colorIdx: 1, members: [] },
+]
 
 const START_SECONDS = 30
 const CUE_RETRY_MS = 4000
@@ -41,6 +47,10 @@ function stageLabel(stage) {
 export default function TournamentGame({ go, options = {} }) {
   const stages = useMemo(() => options.stages ?? [], [options.stages])
   const revealMode = options.reveal ?? 'blur'
+  const teams = useMemo(
+    () => (options.teams?.length ? options.teams : DEFAULT_TEAMS),
+    [options.teams]
+  )
   const songs = useMemo(() => getSongs(), [])
 
   // 곡은 전체 라운드에서 이어서 소진, 이미지는 카테고리별 풀 유지
@@ -50,7 +60,7 @@ export default function TournamentGame({ go, options = {} }) {
 
   const [stageIdx, setStageIdx] = useState(0)
   const [qNo, setQNo] = useState(1)
-  const [scores, setScores] = useState({ p1: 0, p2: 0 })
+  const [scores, setScores] = useState(() => teams.map(() => 0))
   const [phase, setPhase] = useState('intro')
   const [target, setTarget] = useState(null)
 
@@ -192,11 +202,9 @@ export default function TournamentGame({ go, options = {} }) {
     } catch { /* 무시 */ }
   }
 
-  function award(winner) {
-    setScores((prev) => ({
-      p1: prev.p1 + (winner === 1 ? pts : 0),
-      p2: prev.p2 + (winner === 2 ? pts : 0),
-    }))
+  // teamIdx === -1 이면 아무도 못 맞힘
+  function award(teamIdx) {
+    setScores((prev) => prev.map((s, i) => (i === teamIdx ? s + pts : s)))
     if (qNo < stage.count) {
       startQuestion(stageIdx, qNo + 1)
     } else if (stageIdx + 1 < stages.length) {
@@ -214,7 +222,7 @@ export default function TournamentGame({ go, options = {} }) {
     songOrder.current = shuffle(songs)
     songIdx.current = 0
     imagePools.current = {}
-    setScores({ p1: 0, p2: 0 })
+    setScores(teams.map(() => 0))
     setStageIdx(0)
     setPhase('intro')
   }
@@ -227,15 +235,19 @@ export default function TournamentGame({ go, options = {} }) {
   )
 
   const scoreboard = (
-    <div className="flex gap-8">
-      <div className="flex flex-col items-center gap-1 px-8 py-4 rounded-2xl border-2 border-neutral-800">
-        <span className="text-sm text-violet-400">Player 1</span>
-        <span className="text-4xl font-bold text-violet-400">{scores.p1}</span>
-      </div>
-      <div className="flex flex-col items-center gap-1 px-8 py-4 rounded-2xl border-2 border-neutral-800">
-        <span className="text-sm text-rose-400">Player 2</span>
-        <span className="text-4xl font-bold text-rose-400">{scores.p2}</span>
-      </div>
+    <div className="flex flex-wrap justify-center gap-4">
+      {teams.map((t, i) => {
+        const c = teamColor(t.colorIdx)
+        return (
+          <div key={i} className="flex flex-col items-center gap-1 px-6 py-4 rounded-2xl border-2 border-neutral-800">
+            <span className={`text-sm ${c.text}`}>{t.name}</span>
+            <span className={`text-3xl font-bold ${c.text}`}>{scores[i]}</span>
+            {t.members.length > 0 && (
+              <span className="text-[10px] text-neutral-500">{t.members.join(' · ')}</span>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 
@@ -271,16 +283,17 @@ export default function TournamentGame({ go, options = {} }) {
 
   // --- 최종 결과 ---
   if (phase === 'done') {
-    const draw = scores.p1 === scores.p2
-    const winner = scores.p1 > scores.p2 ? 1 : 2
+    const top = Math.max(...scores)
+    const winners = teams.filter((_, i) => scores[i] === top)
+    const draw = winners.length > 1
     return (
       <div className="flex-1 flex flex-col gap-6">
         {playerContainer}
         <div className="flex-1 flex flex-col items-center justify-center text-center gap-8">
           <h2 className="text-3xl font-bold">🏆 라운드전 종료!</h2>
           {scoreboard}
-          <p className={`text-2xl font-bold ${draw ? 'text-neutral-300' : winner === 1 ? 'text-violet-400' : 'text-rose-400'}`}>
-            {draw ? '무승부!' : `Player ${winner} 승리!`}
+          <p className={`text-2xl font-bold ${draw ? 'text-neutral-300' : teamColor(winners[0].colorIdx).text}`}>
+            {draw ? `무승부! (${winners.map((t) => t.name).join(' · ')})` : `${winners[0].name} 승리!`}
           </p>
           <div className="flex flex-col gap-3 w-full max-w-xs">
             <button onClick={restart} className="py-3 rounded-2xl bg-violet-600 hover:bg-violet-500 font-semibold transition">
@@ -312,10 +325,12 @@ export default function TournamentGame({ go, options = {} }) {
           R{stageIdx + 1}/{stages.length} · 문제 {qNo}/{stage.count}
           {isLast && <span className="text-amber-400"> · ⚡2점</span>}
         </span>
-        <div className="flex gap-3 text-sm font-semibold">
-          <span className="text-violet-400">P1 {scores.p1}</span>
-          <span className="text-neutral-600">·</span>
-          <span className="text-rose-400">P2 {scores.p2}</span>
+        <div className="flex flex-wrap justify-end gap-2 text-xs font-semibold max-w-[45%]">
+          {teams.map((t, i) => (
+            <span key={i} className={teamColor(t.colorIdx).text}>
+              {t.name} {scores[i]}
+            </span>
+          ))}
         </div>
       </div>
 
@@ -408,22 +423,23 @@ export default function TournamentGame({ go, options = {} }) {
               ? `누가 맞혔나요? (+${pts}점)`
               : isSong ? '재생 후 선택하세요' : '이미지 공개 후 선택하세요'}
           </p>
+          <div className={`grid gap-3 ${teams.length > 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            {teams.map((t, i) => {
+              const c = teamColor(t.colorIdx)
+              return (
+                <button
+                  key={i}
+                  onClick={() => award(i)}
+                  disabled={!canAward}
+                  className={`w-full ${teams.length > 2 ? 'py-4 text-base' : 'py-5 text-lg'} rounded-2xl ${c.bg} ${c.bgHover} disabled:bg-neutral-800 disabled:text-neutral-600 font-bold transition`}
+                >
+                  {t.name} 정답 🎉
+                </button>
+              )
+            })}
+          </div>
           <button
-            onClick={() => award(1)}
-            disabled={!canAward}
-            className="w-full py-5 rounded-2xl bg-violet-600 hover:bg-violet-500 disabled:bg-neutral-800 disabled:text-neutral-600 text-lg font-bold transition"
-          >
-            Player 1 정답 🎉
-          </button>
-          <button
-            onClick={() => award(2)}
-            disabled={!canAward}
-            className="w-full py-5 rounded-2xl bg-rose-600 hover:bg-rose-500 disabled:bg-neutral-800 disabled:text-neutral-600 text-lg font-bold transition"
-          >
-            Player 2 정답 🎉
-          </button>
-          <button
-            onClick={() => award(0)}
+            onClick={() => award(-1)}
             disabled={!canAward}
             className="w-full py-3 rounded-2xl bg-neutral-800 hover:bg-neutral-700 disabled:text-neutral-700 text-neutral-400 transition"
           >
