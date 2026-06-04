@@ -4,6 +4,8 @@ import ModeSelect from './screens/ModeSelect'
 import Settings from './screens/Settings'
 import SongGame from './screens/SongGame'
 import BattleGame from './screens/BattleGame'
+import ImageSetup from './screens/ImageSetup'
+import ImageBattleGame from './screens/ImageBattleGame'
 import { useSongLibrary } from './hooks/useSongLibrary'
 
 function App() {
@@ -24,6 +26,8 @@ function App() {
         {screen === 'settings' && <Settings go={go} library={library} />}
         {screen === 'song' && <SongGame go={go} options={gameOptions} />}
         {screen === 'battle' && <BattleGame go={go} options={gameOptions} />}
+        {screen === 'imagesetup' && <ImageSetup go={go} />}
+        {screen === 'imagebattle' && <ImageBattleGame go={go} options={gameOptions} />}
       </div>
     </div>
   )
