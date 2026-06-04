@@ -10,33 +10,12 @@ body {
   margin: 0;
 }
 
-/* --- 랜덤 픽 터널 공개 연출 (피파 워크아웃 스타일) --- */
+/* --- 랜덤 픽 터널 공개 연출 (FC 온라인 워크아웃 스타일) --- */
 
-/* 단계 콘텐츠 등장: 크게 떴다가 자리잡음 */
-@keyframes stage-in {
-  from { opacity: 0; transform: scale(1.6); }
-  to   { opacity: 1; transform: scale(1); }
-}
-
-/* 터널 링: 중심에서 화면 밖으로 날아감 */
-@keyframes ring-fly {
-  from { transform: scale(0.15); opacity: 0.9; }
-  to   { transform: scale(3.2); opacity: 0; }
-}
-
-/* 최종 카드 등장: 옆에서 휙 돌아오며 나타남 */
-@keyframes card-in {
-  from { transform: rotateY(-90deg) scale(1.15); }
-  to   { transform: rotateY(0deg) scale(1); }
-}
-
-/* 공개 순간 빛 폭발 */
+/* 카드 공개 순간 빛 폭발 */
 @keyframes burst {
   from { opacity: 0.9; transform: scale(0.5); }
   to   { opacity: 0; transform: scale(2.6); }
 }
 
-.stage-in   { animation: stage-in 0.4s ease-out; }
-.ring-fly   { animation: ring-fly 1.8s linear infinite; }
-.card-in    { animation: card-in 0.45s ease-out; }
 .card-burst { animation: burst 0.8s ease-out forwards; }

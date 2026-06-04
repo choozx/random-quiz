@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getPlayers, setPlayers, getRosterSelected, setRosterSelected } from '../lib/storage'
 import { MAX_TEAMS, teamColor } from '../lib/teams'
 import { getRoster, CARD_FRAME } from '../lib/players'
@@ -16,6 +16,16 @@ const GRADE_STYLE = {
   '레어': { hex: '#a78bfa', label: '레어' },
   '전설': { hex: '#fbbf24', label: '전설 ✨' },
 }
+
+// 터널 단계 사이 깊이 간격(px) — 클수록 한 걸음이 길어진다
+const TUNNEL_SPACING = 600
+// 한 단계 거리를 걷는 데 걸리는 시간(ms) — 등속 주행 속도
+const WALK_MS_PER_STAGE = 1600
+// 팀 텍스트 노출 시간(ms) — 첫 정보라 다른 힌트보다 길게
+const TEAM_EXPOSURE_MS = 1200
+// 출발 지점(단계 단위, 음수) — 노출 시간만큼 팀 텍스트에서 떨어진 곳에서 걸어온다
+// (0.18 = 텍스트를 지나치며 사라지기 시작하는 거리)
+const START_PROGRESS = -(TEAM_EXPOSURE_MS / WALK_MS_PER_STAGE - 0.18)
 
 function shuffle(arr) {
   const a = [...arr]
@@ -366,38 +376,64 @@ export default function TeamSetup({ go }) {
 // ─── 랜덤 픽 터널 공개 (피파 워크아웃 스타일) ───
 function RandomReveal({ assignment, teamNames, teamCount, rosterMap, onFinish, onReshuffle, onBack }) {
   const [idx, setIdx] = useState(0)
-  const [stage, setStage] = useState(0)
+  const [progress, setProgress] = useState(START_PROGRESS) // 팀 텍스트 앞 ~ stages.length-1(카드), 단계 단위
   const [done, setDone] = useState(false)
+  const progressRef = useRef(START_PROGRESS)
 
   const cur = assignment[idx]
   const player = rosterMap.get(cur?.name)
   const stages = useMemo(() => buildStages(player), [player])
-  const stageName = stages[stage]
+  const lastIdx = stages.length - 1
+  const arrived = progress >= lastIdx - 0.001
   const tColor = teamColor(cur?.teamIdx ?? 0)
   const grade = GRADE_STYLE[player?.grade ?? '일반']
   const isLegend = player?.grade === '전설'
 
+  // 일정한 속도로 걸어 들어간다 — 카드 앞에 도착하면 멈추고 클릭 대기
+  // (progress 리셋은 advance의 다음 사람 분기에서 처리)
+  useEffect(() => {
+    let raf
+    let last = performance.now()
+    const tick = (now) => {
+      const dt = now - last
+      last = now
+      const next = Math.min(progressRef.current + dt / WALK_MS_PER_STAGE, lastIdx)
+      progressRef.current = next
+      setProgress(next)
+      if (next < lastIdx) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [idx, lastIdx])
+
   const advance = useCallback(() => {
     if (done) return
-    if (stage < stages.length - 1) {
-      setStage(stage + 1)
+    if (progressRef.current < lastIdx - 0.001) {
+      // 걷는 중 클릭 → 다음 지점으로 건너뛰기
+      const next = Math.min(Math.floor(progressRef.current + 1e-6) + 1, lastIdx)
+      progressRef.current = next
+      setProgress(next)
     } else if (idx < assignment.length - 1) {
+      progressRef.current = START_PROGRESS
+      setProgress(START_PROGRESS)
       setIdx(idx + 1)
-      setStage(0)
     } else {
       setDone(true)
     }
-  }, [done, stage, stages.length, idx, assignment.length])
+  }, [done, lastIdx, idx, assignment.length])
 
-  // 힌트 단계는 자동 진행, 카드 단계는 클릭 대기
-  useEffect(() => {
-    if (done || stageName === 'card') return
-    const t = setTimeout(advance, 1300)
-    return () => clearTimeout(t)
-  }, [done, stageName, advance])
+  // 터널 색: 기본은 팀 색, 등급 지점 근처에선 등급 색으로
+  const tint = stages[Math.min(Math.round(progress), lastIdx)] === 'grade' ? grade.hex : tColor.hex
 
-  // 터널 색: 기본은 팀 색, 등급 단계에서 등급 색으로
-  const tint = stageName === 'grade' ? grade.hex : tColor.hex
+  // 카메라와의 거리(단계 단위)에 따른 표시 — 바로 앞 하나만 보이게
+  function itemOpacity(i) {
+    const d = i - progress
+    if (d > 1.15) return 0                    // 두 단계 이상 앞 — 아직 안 보임
+    if (d > 0.55) return (1.15 - d) / 0.6     // 다가오며 서서히 나타남
+    if (d > -0.18) return 1                   // 눈앞
+    if (d > -0.5) return (d + 0.5) / 0.32     // 지나치며 사라짐
+    return 0
+  }
 
   const boards = (
     <div
@@ -456,75 +492,133 @@ function RandomReveal({ assignment, teamNames, teamCount, rosterMap, onFinish, o
         </button>
       </div>
 
-      {/* 터널 무대 — 클릭하면 다음 단계 */}
+      {/* 터널 무대 — 클릭하면 다음 단계. 힌트들이 터널 안에 일렬로 서 있고 카메라가 카드까지 걸어 들어간다 */}
       <div
         onClick={advance}
-        className="relative w-full aspect-square sm:aspect-video rounded-3xl overflow-hidden bg-neutral-950 border border-neutral-800 cursor-pointer select-none flex items-center justify-center"
+        className="relative w-full aspect-square sm:aspect-video rounded-3xl overflow-hidden bg-neutral-950 border border-neutral-800 cursor-pointer select-none"
+        style={{ perspective: '700px' }}
       >
-        {/* 터널 링 */}
-        {[0, 0.6, 1.2].map((delay) => (
-          <div
-            key={delay}
-            className="ring-fly absolute w-40 h-40 rounded-full border-2 pointer-events-none"
-            style={{ borderColor: tint, animationDelay: `${delay}s` }}
-          />
-        ))}
+        {/* key=idx: 다음 사람으로 넘어가면 터널 입구에서 새로 시작 */}
+        <div
+          key={idx}
+          className="absolute inset-0"
+          style={{
+            transformStyle: 'preserve-3d',
+            transform: `translateZ(${progress * TUNNEL_SPACING}px)`,
+          }}
+        >
+          {/* 터널 벽 프레임 — 지나칠 때 시차로 걸어가는 느낌을 만든다 */}
+          {Array.from({ length: (stages.length - 1) * 3 + 4 }, (_, k) => (
+            <div
+              key={k}
+              className="absolute rounded-[2.5rem] border-2 pointer-events-none"
+              style={{
+                inset: '6%',
+                borderColor: tint,
+                opacity: 0.22,
+                transform: `translateZ(${-k * (TUNNEL_SPACING / 3)}px)`,
+                transition: 'border-color 0.6s',
+              }}
+            />
+          ))}
 
-        {/* 단계 콘텐츠 */}
-        <div key={`${idx}-${stage}`} className="relative z-10 text-center px-6">
-          {stageName === 'team' && (
-            <div className="stage-in">
-              <p className="text-sm text-neutral-400 mb-2">다음 멤버가 합류할 팀은…</p>
-              <h2 className={`text-4xl font-bold ${tColor.text}`}>{teamNames[cur.teamIdx]}</h2>
+          {/* 터널 끝의 빛 — 카드가 기다리는 곳 */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              transform: `translateZ(${-(stages.length - 1) * TUNNEL_SPACING - 80}px)`,
+              background: `radial-gradient(circle, ${tint}55 0%, transparent 65%)`,
+            }}
+          />
+
+          {/* 단계 콘텐츠 — 깊이를 따라 일렬 배치, 바로 앞 것만 보이고 지나치면 사라짐 */}
+          {stages.map((name, i) => (
+            <div
+              key={`${idx}-${i}`}
+              className="absolute inset-0 flex items-center justify-center text-center px-6"
+              style={{
+                transform: `translateZ(${-i * TUNNEL_SPACING}px)`,
+                opacity: itemOpacity(i),
+              }}
+            >
+              {stageItem(name)}
             </div>
-          )}
-          {stageName === 'grade' && (
-            <div className="stage-in">
-              <p className="text-sm text-neutral-400 mb-2">카드 등급</p>
-              <h2 className="text-4xl font-bold" style={{ color: grade.hex }}>{grade.label}</h2>
-            </div>
-          )}
-          {stageName === 'region' && (
-            <div className="stage-in">
-              <p className="text-sm text-neutral-400 mb-2">출신</p>
-              <h2 className="text-3xl font-bold text-neutral-100">{player.region}</h2>
-            </div>
-          )}
-          {stageName === 'age' && (
-            <div className="stage-in">
-              <p className="text-sm text-neutral-400 mb-2">나이</p>
-              <h2 className="text-3xl font-bold text-neutral-100">
-                {Math.floor((player.birthYear % 100) / 10)}X년생
-              </h2>
-            </div>
-          )}
-          {stageName === 'nickname' && (
-            <div className="stage-in">
-              <p className="text-sm text-neutral-400 mb-2">별명</p>
-              <h2 className="text-3xl font-bold text-neutral-100">“{player.nickname}”</h2>
-            </div>
-          )}
-          {stageName === 'silhouette' && (
-            <div className="stage-in">
-              <img
-                src={player.photo}
-                alt=""
-                className="h-52 mx-auto rounded-2xl object-contain"
-                style={{ filter: `brightness(0) drop-shadow(0 0 30px ${tColor.hex})` }}
-              />
-            </div>
-          )}
-          {stageName === 'card' && (
-            <div className="relative">
-              {/* 빛 폭발 */}
-              <div
-                className="card-burst absolute inset-0 m-auto w-40 h-40 rounded-full pointer-events-none"
-                style={{ background: `radial-gradient(circle, ${isLegend ? '#fbbf24' : '#ffffff'} 0%, transparent 70%)` }}
-              />
-              {CARD_FRAME ? (
+          ))}
+        </div>
+      </div>
+
+      {boards}
+    </div>
+  )
+
+  // 터널의 각 지점에 놓이는 콘텐츠
+  function stageItem(name) {
+    if (name === 'team') {
+      return (
+        <div>
+          <p className="text-sm text-neutral-400 mb-2">다음 멤버가 합류할 팀은…</p>
+          <h2 className={`text-4xl font-bold ${tColor.text}`}>{teamNames[cur.teamIdx]}</h2>
+        </div>
+      )
+    }
+    if (name === 'grade') {
+      return (
+        <div>
+          <p className="text-sm text-neutral-400 mb-2">카드 등급</p>
+          <h2 className="text-4xl font-bold" style={{ color: grade.hex }}>{grade.label}</h2>
+        </div>
+      )
+    }
+    if (name === 'region') {
+      return (
+        <div>
+          <p className="text-sm text-neutral-400 mb-2">출신</p>
+          <h2 className="text-3xl font-bold text-neutral-100">{player.region}</h2>
+        </div>
+      )
+    }
+    if (name === 'age') {
+      return (
+        <div>
+          <p className="text-sm text-neutral-400 mb-2">나이</p>
+          <h2 className="text-3xl font-bold text-neutral-100">
+            {Math.floor((player.birthYear % 100) / 10)}X년생
+          </h2>
+        </div>
+      )
+    }
+    if (name === 'nickname') {
+      return (
+        <div>
+          <p className="text-sm text-neutral-400 mb-2">별명</p>
+          <h2 className="text-3xl font-bold text-neutral-100">“{player.nickname}”</h2>
+        </div>
+      )
+    }
+    if (name === 'silhouette') {
+      return (
+        <img
+          src={player.photo}
+          alt=""
+          className="h-52 rounded-2xl object-contain"
+          style={{ filter: `brightness(0) drop-shadow(0 0 30px ${tColor.hex})` }}
+        />
+      )
+    }
+    // name === 'card'
+    return (
+      <div className="relative">
+        {/* 빛 폭발 — 카메라가 카드 앞에 도착한 순간 */}
+        {arrived && (
+          <div
+            className="card-burst absolute inset-0 m-auto w-40 h-40 rounded-full pointer-events-none"
+            style={{ background: `radial-gradient(circle, ${isLegend ? '#fbbf24' : '#ffffff'} 0%, transparent 70%)` }}
+          />
+        )}
+        {CARD_FRAME ? (
                 /* 피파 스타일 카드 프레임 합성 */
                 <div
-                  className="card-in relative w-64 aspect-square mx-auto"
+                  className="relative w-64 aspect-square mx-auto"
                   style={{ filter: `drop-shadow(0 0 20px ${isLegend ? '#fbbf24aa' : tColor.hex + '88'})` }}
                 >
                   <img src={CARD_FRAME} alt="" className="absolute inset-0 w-full h-full object-contain pointer-events-none" />
@@ -563,7 +657,7 @@ function RandomReveal({ assignment, teamNames, teamCount, rosterMap, onFinish, o
               ) : (
                 /* 프레임 이미지가 없을 때의 기본 카드 */
                 <div
-                  className="card-in relative w-52 mx-auto rounded-2xl overflow-hidden border-2 bg-neutral-900"
+                  className="relative w-52 mx-auto rounded-2xl overflow-hidden border-2 bg-neutral-900"
                   style={{ borderColor: grade.hex, boxShadow: `0 0 36px ${isLegend ? '#fbbf2466' : tColor.hex + '55'}` }}
                 >
                   {player?.photo ? (
@@ -587,13 +681,10 @@ function RandomReveal({ assignment, teamNames, teamCount, rosterMap, onFinish, o
                   </div>
                 </div>
               )}
-              <p className="text-xs text-neutral-500 mt-4">클릭해서 계속</p>
-            </div>
-          )}
-        </div>
+        {arrived && (
+          <p className="text-xs text-neutral-500 mt-4">클릭해서 계속</p>
+        )}
       </div>
-
-      {boards}
-    </div>
-  )
+    )
+  }
 }
