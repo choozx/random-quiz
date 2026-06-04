@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getPlayers, setPlayers, getRosterSelected, setRosterSelected } from '../lib/storage'
 import { MAX_TEAMS, teamColor } from '../lib/teams'
-import { getRoster } from '../lib/players'
+import { getRoster, CARD_FRAME } from '../lib/players'
+
+// 카드 프레임 위 요소 배치 (프레임 이미지 기준 % 좌표 — 프레임을 바꾸면 여기만 조정)
+const FRAME_LAYOUT = {
+  photo: { left: '31.5%', top: '6%', width: '37%', height: '53%' },
+  photoClip: 'polygon(0 0, 100% 0, 100% 82%, 50% 100%, 0 82%)', // 패널 아래쪽 뾰족한 모양
+  ovr: { left: '16%', top: '8%' },
+  nameTop: '61%',
+}
 
 const GRADE_STYLE = {
   '일반': { hex: '#d4d4d4', label: '일반' },
@@ -513,30 +521,72 @@ function RandomReveal({ assignment, teamNames, teamCount, rosterMap, onFinish, o
                 className="card-burst absolute inset-0 m-auto w-40 h-40 rounded-full pointer-events-none"
                 style={{ background: `radial-gradient(circle, ${isLegend ? '#fbbf24' : '#ffffff'} 0%, transparent 70%)` }}
               />
-              <div
-                className="card-in relative w-52 mx-auto rounded-2xl overflow-hidden border-2 bg-neutral-900"
-                style={{ borderColor: grade.hex, boxShadow: `0 0 36px ${isLegend ? '#fbbf2466' : tColor.hex + '55'}` }}
-              >
-                {player?.photo ? (
-                  <img src={player.photo} alt="" className="w-full h-52 object-cover" />
-                ) : (
-                  <div className="w-full h-32 flex items-center justify-center text-5xl font-bold text-neutral-600">
-                    {cur.name[0]}
-                  </div>
-                )}
-                <div className="p-3 text-left" style={{ background: `linear-gradient(160deg, ${tColor.hex}33, transparent)` }}>
-                  <div className="flex items-end justify-between gap-2">
-                    <span className="text-lg font-bold text-neutral-50">{cur.name}</span>
-                    {player?.ovr && (
-                      <span className="text-2xl font-bold" style={{ color: grade.hex }}>{player.ovr}</span>
-                    )}
-                  </div>
-                  <div className="flex justify-between text-xs mt-1">
-                    <span className={tColor.text}>{teamNames[cur.teamIdx]}</span>
-                    {player && <span style={{ color: grade.hex }}>{player.grade}</span>}
+              {CARD_FRAME ? (
+                /* 피파 스타일 카드 프레임 합성 */
+                <div
+                  className="card-in relative w-64 aspect-square mx-auto"
+                  style={{ filter: `drop-shadow(0 0 20px ${isLegend ? '#fbbf24aa' : tColor.hex + '88'})` }}
+                >
+                  <img src={CARD_FRAME} alt="" className="absolute inset-0 w-full h-full object-contain pointer-events-none" />
+                  {player?.photo ? (
+                    <img
+                      src={player.photo}
+                      alt=""
+                      className="absolute object-cover"
+                      style={{ ...FRAME_LAYOUT.photo, clipPath: FRAME_LAYOUT.photoClip }}
+                    />
+                  ) : (
+                    <div
+                      className="absolute flex items-center justify-center text-6xl font-bold text-white/70"
+                      style={FRAME_LAYOUT.photo}
+                    >
+                      {cur.name[0]}
+                    </div>
+                  )}
+                  {player?.ovr && (
+                    <span
+                      className="absolute text-2xl font-bold"
+                      style={{ ...FRAME_LAYOUT.ovr, color: '#ffe9a8', textShadow: '0 1px 4px rgba(0,0,0,.85)' }}
+                    >
+                      {player.ovr}
+                    </span>
+                  )}
+                  <div className="absolute inset-x-0 text-center" style={{ top: FRAME_LAYOUT.nameTop }}>
+                    <p className="text-xl font-bold text-white" style={{ textShadow: '0 1px 6px rgba(0,0,0,.9)' }}>
+                      {cur.name}
+                    </p>
+                    <p className={`text-sm font-semibold ${tColor.text}`} style={{ textShadow: '0 1px 4px rgba(0,0,0,.9)' }}>
+                      {teamNames[cur.teamIdx]}{player ? ` · ${player.grade}` : ''}
+                    </p>
                   </div>
                 </div>
-              </div>
+              ) : (
+                /* 프레임 이미지가 없을 때의 기본 카드 */
+                <div
+                  className="card-in relative w-52 mx-auto rounded-2xl overflow-hidden border-2 bg-neutral-900"
+                  style={{ borderColor: grade.hex, boxShadow: `0 0 36px ${isLegend ? '#fbbf2466' : tColor.hex + '55'}` }}
+                >
+                  {player?.photo ? (
+                    <img src={player.photo} alt="" className="w-full h-52 object-cover" />
+                  ) : (
+                    <div className="w-full h-32 flex items-center justify-center text-5xl font-bold text-neutral-600">
+                      {cur.name[0]}
+                    </div>
+                  )}
+                  <div className="p-3 text-left" style={{ background: `linear-gradient(160deg, ${tColor.hex}33, transparent)` }}>
+                    <div className="flex items-end justify-between gap-2">
+                      <span className="text-lg font-bold text-neutral-50">{cur.name}</span>
+                      {player?.ovr && (
+                        <span className="text-2xl font-bold" style={{ color: grade.hex }}>{player.ovr}</span>
+                      )}
+                    </div>
+                    <div className="flex justify-between text-xs mt-1">
+                      <span className={tColor.text}>{teamNames[cur.teamIdx]}</span>
+                      {player && <span style={{ color: grade.hex }}>{player.grade}</span>}
+                    </div>
+                  </div>
+                </div>
+              )}
               <p className="text-xs text-neutral-500 mt-4">클릭해서 계속</p>
             </div>
           )}

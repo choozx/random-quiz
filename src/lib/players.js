@@ -16,6 +16,10 @@ for (const [path, url] of Object.entries(photoModules)) {
   photos[file.replace(IMAGE_EXT, '')] = url
 }
 
+// 카드 프레임 등 연출용 공용 에셋 — 개인정보가 아니므로 src/assets/reveal/ 에서 깃으로 관리
+const frameModules = import.meta.glob('../assets/reveal/card_frame.png', { eager: true, query: '?url', import: 'default' })
+export const CARD_FRAME = Object.values(frameModules)[0] ?? null
+
 // [{ name, birthYear, region, nickname, grade, ovr, photo }] — 이름만 필수
 export function getRoster() {
   if (!Array.isArray(rosterRaw)) return []
