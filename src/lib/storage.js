@@ -39,8 +39,11 @@ export const getSongsSource = () => read('songsSource', '')
 export const setSongsSource = (id) => write('songsSource', id)
 
 // --- 참가자 명단 (라운드전 팀 구성용) ---
+// players = 직접 타이핑으로 추가한 이름들, rosterSelected = players.json 명단에서 체크한 이름들
 export const getPlayers = () => read('players', [])
 export const setPlayers = (v) => write('players', v)
+export const getRosterSelected = () => read('rosterSelected', [])
+export const setRosterSelected = (v) => write('rosterSelected', v)
 
 // --- 노래 게임 누적 기록 ---
 // { games, totalCorrect, totalRounds, best } (best = 한 판 최고 정답수)

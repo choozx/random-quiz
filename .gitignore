@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# 참가자 명단·사진 — 개인정보라 깃에 올리지 않는다 (양식 예시 파일만 커밋)
+src/players/*
+!src/players/players.example.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
