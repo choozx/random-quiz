@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import confetti from 'canvas-confetti'
 import { getPlayers, setPlayers, getRosterSelected, setRosterSelected } from '../lib/storage'
 import { MAX_TEAMS, teamColor } from '../lib/teams'
 import { getRoster, CARD_FRAME } from '../lib/players'
@@ -50,10 +51,25 @@ function randomAssignment(names, teamCount) {
   return shuffled.map((name, i) => ({ name, teamIdx: teamOrder[i % teamCount] }))
 }
 
+// 카드 등장 빵빠레 — 화면 하단 양쪽 꼭지점에서 발사 (canvas-confetti)
+function fireFanfare() {
+  const opts = {
+    particleCount: 90,
+    spread: 65,
+    startVelocity: 55,
+    ticks: 220,
+    gravity: 1.1,
+    scalar: 1.05,
+    colors: ['#fbbf24', '#f43f5e', '#8b5cf6', '#10b981', '#0ea5e9', '#ffffff'],
+  }
+  confetti({ ...opts, angle: 60, origin: { x: 0, y: 1 } })   // 왼쪽 아래 꼭지점
+  confetti({ ...opts, angle: 120, origin: { x: 1, y: 1 } })  // 오른쪽 아래 꼭지점
+}
+
 // 터널 공개 단계 — 데이터 있는 항목만 (명단에 없는 사람은 팀 → 카드로 바로)
 function buildStages(p) {
   if (!p) return ['team', 'card']
-  const stages = ['team', 'grade']
+  const stages = ['team']
   if (p.region) stages.push('region')
   if (p.birthYear) stages.push('age')
   if (p.nickname) stages.push('nickname')
@@ -392,19 +408,22 @@ function RandomReveal({ assignment, teamNames, teamCount, rosterMap, onFinish, o
   // 일정한 속도로 걸어 들어간다 — 카드 앞에 도착하면 멈추고 클릭 대기
   // (progress 리셋은 advance의 다음 사람 분기에서 처리)
   useEffect(() => {
+    // 출구의 흰 벽을 통과하고 잠시 흰 빛 속을 걸은 뒤 도착 처리 (+0.75 = 흰 화면 머무는 시간)
+    const exitPassAt = (stages.includes('silhouette') ? lastIdx - 0.95 : lastIdx - 0.8) + 0.75
     let raf
     let last = performance.now()
     const tick = (now) => {
       const dt = now - last
       last = now
-      const next = Math.min(progressRef.current + dt / WALK_MS_PER_STAGE, lastIdx)
+      let next = Math.min(progressRef.current + dt / WALK_MS_PER_STAGE, lastIdx)
+      if (next >= exitPassAt) next = lastIdx
       progressRef.current = next
       setProgress(next)
       if (next < lastIdx) raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [idx, lastIdx])
+  }, [idx, lastIdx, stages])
 
   const advance = useCallback(() => {
     if (done) return
@@ -422,8 +441,13 @@ function RandomReveal({ assignment, teamNames, teamCount, rosterMap, onFinish, o
     }
   }, [done, lastIdx, idx, assignment.length])
 
-  // 터널 색: 기본은 팀 색, 등급 지점 근처에선 등급 색으로
-  const tint = stages[Math.min(Math.round(progress), lastIdx)] === 'grade' ? grade.hex : tColor.hex
+  // 카드 등장 순간 빵빠레 발사
+  useEffect(() => {
+    if (arrived && !done) fireFanfare()
+  }, [arrived, done])
+
+  // 터널 색은 항상 팀 색
+  const tint = tColor.hex
 
   // 카메라와의 거리(단계 단위)에 따른 표시 — 바로 앞 하나만 보이게
   function itemOpacity(i) {
@@ -434,6 +458,15 @@ function RandomReveal({ assignment, teamNames, teamCount, rosterMap, onFinish, o
     if (d > -0.5) return (d + 0.5) / 0.32     // 지나치며 사라짐
     return 0
   }
+
+  // ── 축구장 입장 터널 지오메트리 ──
+  const HW = 300 // 복도 절반 너비(px)
+  const HH = 190 // 복도 절반 높이(px)
+  const Z_NEAR = 500 // 입구 뒤쪽 여유 길이
+  const tunnelLen = Z_NEAR + lastIdx * TUNNEL_SPACING + 1200 // 복도 전체 길이
+  const wallShift = tunnelLen / 2 - Z_NEAR // 평면 중심을 복도 중앙으로 보내는 이동량
+  // 출구 개구부 깊이 — 실루엣 바로 뒤 (실루엣이 없으면 카드 자리 뒤)
+  const exitZ = -((stages.includes('silhouette') ? lastIdx - 1 : lastIdx) * TUNNEL_SPACING + 300)
 
   const boards = (
     <div
@@ -507,44 +540,94 @@ function RandomReveal({ assignment, teamNames, teamCount, rosterMap, onFinish, o
             transform: `translateZ(${progress * TUNNEL_SPACING}px)`,
           }}
         >
-          {/* 터널 벽 프레임 — 지나칠 때 시차로 걸어가는 느낌을 만든다 */}
-          {Array.from({ length: (stages.length - 1) * 3 + 4 }, (_, k) => (
+          {/* 좌우 벽 — 패널 이음새 + 팀 색 네온 라인 */}
+          {[
+            { x: -HW, rot: 'rotateY(90deg)', s: wallShift },
+            { x: HW, rot: 'rotateY(-90deg)', s: -wallShift },
+          ].map((w, i) => (
             <div
-              key={k}
-              className="absolute rounded-[2.5rem] border-2 pointer-events-none"
+              key={`wall-${i}`}
+              className="absolute left-1/2 top-1/2 pointer-events-none"
               style={{
-                inset: '6%',
-                borderColor: tint,
-                opacity: 0.22,
-                transform: `translateZ(${-k * (TUNNEL_SPACING / 3)}px)`,
-                transition: 'border-color 0.6s',
+                width: `${tunnelLen}px`,
+                height: `${HH * 2}px`,
+                transform: `translate(-50%, -50%) translateX(${w.x}px) ${w.rot} translateX(${w.s}px)`,
+                background: [
+                  'linear-gradient(180deg, rgba(255,255,255,0.06), transparent 28%)',
+                  `linear-gradient(180deg, transparent 60%, ${tint}44 61%, ${tint}cc 63%, ${tint}44 65%, transparent 66%)`,
+                  'repeating-linear-gradient(90deg, rgba(255,255,255,0.07) 0 2px, transparent 2px 220px)',
+                  'linear-gradient(180deg, #0c1226, #090d1a)',
+                ].join(','),
               }}
             />
           ))}
 
-          {/* 터널 끝의 빛 — 카드가 기다리는 곳 */}
+          {/* 천장 — 일정 간격으로 지나가는 조명 바 */}
           <div
-            className="absolute inset-0 pointer-events-none"
+            className="absolute left-1/2 top-1/2 pointer-events-none"
             style={{
-              transform: `translateZ(${-(stages.length - 1) * TUNNEL_SPACING - 80}px)`,
-              background: `radial-gradient(circle, ${tint}55 0%, transparent 65%)`,
+              width: `${HW * 2}px`,
+              height: `${tunnelLen}px`,
+              transform: `translate(-50%, -50%) translateY(${-HH}px) rotateX(90deg) translateY(${-wallShift}px)`,
+              background: [
+                `repeating-linear-gradient(180deg, transparent 0 252px, ${tint}33 252px 260px, rgba(255,255,255,0.85) 260px 272px, ${tint}33 272px 280px, transparent 280px 300px)`,
+                'linear-gradient(90deg, #0a0e1c, #0e1428 50%, #0a0e1c)',
+              ].join(','),
             }}
           />
 
-          {/* 단계 콘텐츠 — 깊이를 따라 일렬 배치, 바로 앞 것만 보이고 지나치면 사라짐 */}
+          {/* 바닥 — 중앙 러너 + 가로 이음새 */}
+          <div
+            className="absolute left-1/2 top-1/2 pointer-events-none"
+            style={{
+              width: `${HW * 2}px`,
+              height: `${tunnelLen}px`,
+              transform: `translate(-50%, -50%) translateY(${HH}px) rotateX(-90deg) translateY(${wallShift}px)`,
+              background: [
+                `linear-gradient(90deg, transparent 0 45%, ${tint}30 45% 55%, transparent 55%)`,
+                'repeating-linear-gradient(180deg, rgba(255,255,255,0.05) 0 3px, transparent 3px 300px)',
+                'linear-gradient(180deg, #0c101f, #080b15)',
+              ].join(','),
+            }}
+          />
+
+          {/* 터널 출구 개구부 — 입구에서부터 저 멀리 작게 보이는 바깥의 흰 빛.
+              걸을수록 커지다가 통과(화이트아웃)하고, 도착하면 카드 뒤에서 사라진다 */}
+          <div
+            className="absolute left-1/2 top-1/2 bg-white pointer-events-none"
+            style={{
+              width: `${HW * 2}px`,
+              height: `${HH * 2}px`,
+              transform: `translate(-50%, -50%) translateZ(${exitZ}px)`,
+              boxShadow: '0 0 120px 50px rgba(255,255,255,0.5)',
+              opacity: arrived ? 0 : 1,
+              transition: 'opacity 0.5s',
+            }}
+          />
+
+          {/* 단계 콘텐츠 — 깊이를 따라 일렬 배치, 바로 앞 것만 보이고 지나치면 사라짐.
+              카드는 다가오며 보이는 게 아니라 화이트아웃이 걷힐 때 바로 등장 */}
           {stages.map((name, i) => (
             <div
               key={`${idx}-${i}`}
               className="absolute inset-0 flex items-center justify-center text-center px-6"
               style={{
                 transform: `translateZ(${-i * TUNNEL_SPACING}px)`,
-                opacity: itemOpacity(i),
+                opacity: i === lastIdx ? (arrived ? 1 : 0) : itemOpacity(i),
               }}
             >
               {stageItem(name)}
             </div>
           ))}
         </div>
+
+        {/* 가장자리 비네트 — 터널 특유의 어둑한 톤 */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{ background: 'radial-gradient(ellipse at center, transparent 42%, rgba(0,0,0,0.6) 100%)' }}
+        />
+
+
       </div>
 
       {boards}
@@ -561,27 +644,19 @@ function RandomReveal({ assignment, teamNames, teamCount, rosterMap, onFinish, o
         </div>
       )
     }
-    if (name === 'grade') {
-      return (
-        <div>
-          <p className="text-sm text-neutral-400 mb-2">카드 등급</p>
-          <h2 className="text-4xl font-bold" style={{ color: grade.hex }}>{grade.label}</h2>
-        </div>
-      )
-    }
     if (name === 'region') {
       return (
         <div>
-          <p className="text-sm text-neutral-400 mb-2">출신</p>
-          <h2 className="text-3xl font-bold text-neutral-100">{player.region}</h2>
+          <p className="text-sm text-neutral-600 mb-2">출신</p>
+          <h2 className="text-3xl font-bold text-neutral-900">{player.region}</h2>
         </div>
       )
     }
     if (name === 'age') {
       return (
         <div>
-          <p className="text-sm text-neutral-400 mb-2">나이</p>
-          <h2 className="text-3xl font-bold text-neutral-100">
+          <p className="text-sm text-neutral-600 mb-2">나이</p>
+          <h2 className="text-3xl font-bold text-neutral-900">
             {Math.floor((player.birthYear % 100) / 10)}X년생
           </h2>
         </div>
@@ -590,18 +665,19 @@ function RandomReveal({ assignment, teamNames, teamCount, rosterMap, onFinish, o
     if (name === 'nickname') {
       return (
         <div>
-          <p className="text-sm text-neutral-400 mb-2">별명</p>
-          <h2 className="text-3xl font-bold text-neutral-100">“{player.nickname}”</h2>
+          <p className="text-sm text-neutral-600 mb-2">별명</p>
+          <h2 className="text-3xl font-bold text-neutral-900">“{player.nickname}”</h2>
         </div>
       )
     }
     if (name === 'silhouette') {
+      // 출구의 흰 빛(상시 보이는 출구 개구부)을 등지고 선 검은 인물
       return (
         <img
           src={player.photo}
           alt=""
-          className="h-52 rounded-2xl object-contain"
-          style={{ filter: `brightness(0) drop-shadow(0 0 30px ${tColor.hex})` }}
+          className="h-52 object-contain"
+          style={{ filter: 'brightness(0)' }}
         />
       )
     }
