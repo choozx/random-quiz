@@ -17,23 +17,24 @@ export default function TournamentSetup({ go, options = {} }) {
   ]
   const firstOk = typeOptions.find((t) => t.ok)?.key
 
+  // reveal: 이미지 공개 방식 ('blur' | 'direct') — 라운드마다 따로 설정
   const [stages, setStages] = useState(() => {
     const init = []
-    if (songs.length >= 4) init.push({ type: 'song', count: 5 })
-    if (IMAGES.length >= 4) init.push({ type: 'image:전체', count: 5 })
-    if (!init.length && firstOk) init.push({ type: firstOk, count: 5 })
+    if (songs.length >= 4) init.push({ type: 'song', count: 5, reveal: 'blur' })
+    if (IMAGES.length >= 4) init.push({ type: 'image:전체', count: 5, reveal: 'blur' })
+    if (!init.length && firstOk) init.push({ type: firstOk, count: 5, reveal: 'blur' })
     return init
   })
-  const [reveal, setReveal] = useState('blur')
-
-  const hasImageStage = stages.some((s) => s.type.startsWith('image'))
 
   function setStage(i, patch) {
     setStages((prev) => prev.map((s, idx) => (idx === i ? { ...s, ...patch } : s)))
   }
 
   function addStage() {
-    setStages((prev) => [...prev, { type: prev[prev.length - 1]?.type ?? firstOk, count: 5 }])
+    setStages((prev) => {
+      const last = prev[prev.length - 1]
+      return [...prev, { type: last?.type ?? firstOk, count: 5, reveal: last?.reveal ?? 'blur' }]
+    })
   }
 
   function removeStage(i) {
@@ -41,12 +42,12 @@ export default function TournamentSetup({ go, options = {} }) {
   }
 
   function start() {
-    const parsed = stages.map(({ type, count }) =>
+    const parsed = stages.map(({ type, count, reveal }) =>
       type === 'song'
         ? { kind: 'song', count }
-        : { kind: 'image', category: type.slice('image:'.length), count }
+        : { kind: 'image', category: type.slice('image:'.length), count, reveal: reveal ?? 'blur' }
     )
-    go('tournament', { stages: parsed, reveal })
+    go('tournament', { stages: parsed })
   }
 
   if (!firstOk) {
@@ -141,6 +142,27 @@ export default function TournamentSetup({ go, options = {} }) {
                   </button>
                 ))}
               </div>
+              {s.type.startsWith('image') && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-neutral-500">공개 방식</span>
+                  {[
+                    { key: 'blur', label: '🌫 블러' },
+                    { key: 'direct', label: '👁 바로 공개' },
+                  ].map((m) => (
+                    <button
+                      key={m.key}
+                      onClick={() => setStage(i, { reveal: m.key })}
+                      className={`px-3 py-1 rounded-lg text-sm font-semibold transition ${
+                        (s.reveal ?? 'blur') === m.key
+                          ? 'bg-violet-600 text-white'
+                          : 'bg-neutral-800 text-neutral-400 hover:text-neutral-200'
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )
         })}
@@ -154,30 +176,6 @@ export default function TournamentSetup({ go, options = {} }) {
           </button>
         )}
       </div>
-
-      {hasImageStage && (
-        <div className="flex items-center justify-between p-4 rounded-2xl bg-neutral-900 border border-neutral-700">
-          <span className="text-sm font-medium text-neutral-300">이미지 공개 방식</span>
-          <div className="flex gap-2">
-            {[
-              { key: 'blur', label: '🌫 블러' },
-              { key: 'direct', label: '👁 바로 공개' },
-            ].map((m) => (
-              <button
-                key={m.key}
-                onClick={() => setReveal(m.key)}
-                className={`px-3 py-1.5 rounded-xl text-sm font-semibold transition ${
-                  reveal === m.key
-                    ? 'bg-violet-600 text-white'
-                    : 'bg-neutral-800 text-neutral-400 hover:text-neutral-200'
-                }`}
-              >
-                {m.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       <div className="flex flex-col gap-3 mt-auto">
         <p className="text-center text-xs text-neutral-500">

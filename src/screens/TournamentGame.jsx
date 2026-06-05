@@ -46,7 +46,6 @@ function stageLabel(stage) {
 // phase: 'intro' | 'play' | 'done'
 export default function TournamentGame({ go, options = {} }) {
   const stages = useMemo(() => options.stages ?? [], [options.stages])
-  const revealMode = options.reveal ?? 'blur'
   const teams = useMemo(
     () => (options.teams?.length ? options.teams : DEFAULT_TEAMS),
     [options.teams]
@@ -81,6 +80,7 @@ export default function TournamentGame({ go, options = {} }) {
   const isLast = stageIdx === stages.length - 1
   const pts = isLast ? 2 : 1
   const isSong = stage?.kind === 'song'
+  const revealMode = stage?.reveal ?? 'blur' // 이미지 공개 방식 — 라운드마다 설정
 
   const nextSong = useCallback(() => {
     if (songIdx.current >= songOrder.current.length) {
