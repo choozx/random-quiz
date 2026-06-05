@@ -6,7 +6,7 @@ const rosterRaw = Object.values(rosterModules)[0] ?? []
 const photoModules = import.meta.glob('../players/*', { eager: true, query: '?url', import: 'default' })
 
 const IMAGE_EXT = /\.(png|jpe?g|webp|gif|avif|bmp|svg)$/i
-const GRADES = ['일반', '레어', '전설']
+const GRADES = ['normal', 'rare', 'legend']
 
 const photos = {}
 for (const [path, url] of Object.entries(photoModules)) {
@@ -20,21 +20,24 @@ for (const [path, url] of Object.entries(photoModules)) {
 const frameModules = import.meta.glob('../assets/reveal/card_frame.png', { eager: true, query: '?url', import: 'default' })
 export const CARD_FRAME = Object.values(frameModules)[0] ?? null
 
-// [{ name, birthYear, region, nickname, grade, ovr, photo }] — 이름만 필수
+// [{ name, birthYear, region, nickname, grade, ovr, photo, couple }] — name만 필수
+// grade: normal | rare | legend
+// couple: 커플 상대 이름 — 랜덤 픽에서 같은 팀에 배정 (한쪽에만 적어도 됨)
 export function getRoster() {
   if (!Array.isArray(rosterRaw)) return []
   return rosterRaw
-    .filter((p) => p && p['이름'])
+    .filter((p) => p && p.name)
     .map((p) => {
-      const name = String(p['이름']).normalize('NFC').trim()
+      const name = String(p.name).normalize('NFC').trim()
       return {
         name,
-        birthYear: Number(p['출생년도']) || null,
-        region: p['지역'] ?? '',
-        nickname: p['별명'] ?? '',
-        grade: GRADES.includes(p['등급']) ? p['등급'] : '일반',
-        ovr: Number(p['OVR']) || null,
+        birthYear: Number(p.birthYear) || null,
+        region: p.region ?? '',
+        nickname: p.nickname ?? '',
+        grade: GRADES.includes(p.grade) ? p.grade : 'normal',
+        ovr: Number(p.ovr) || null,
         photo: photos[name] ?? null,
+        couple: String(p.couple ?? '').normalize('NFC').trim() || null,
       }
     })
 }

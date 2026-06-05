@@ -13,9 +13,9 @@ const FRAME_LAYOUT = {
 }
 
 const GRADE_STYLE = {
-  '일반': { hex: '#d4d4d4', label: '일반' },
-  '레어': { hex: '#a78bfa', label: '레어' },
-  '전설': { hex: '#fbbf24', label: '전설 ✨' },
+  normal: { hex: '#d4d4d4', label: '일반' },
+  rare: { hex: '#a78bfa', label: '레어' },
+  legend: { hex: '#fbbf24', label: '전설 ✨' },
 }
 
 // 터널 단계 사이 깊이 간격(px) — 클수록 한 걸음이 길어진다
@@ -44,11 +44,35 @@ function teamForPick(p, teamCount) {
   return round % 2 === 0 ? pos : teamCount - 1 - pos
 }
 
-// 인원 균형 랜덤 배정 (팀별 차이 최대 1명, 남는 자리는 랜덤 팀에)
-function randomAssignment(names, teamCount) {
-  const shuffled = shuffle(names)
-  const teamOrder = shuffle(Array.from({ length: teamCount }, (_, i) => i))
-  return shuffled.map((name, i) => ({ name, teamIdx: teamOrder[i % teamCount] }))
+// 인원 균형 랜덤 배정 — 커플(둘 다 참가 중)은 한 묶음으로 같은 팀에
+function randomAssignment(names, teamCount, coupleOf = new Map()) {
+  // 1) 커플은 2인 그룹, 나머지는 1인 그룹으로 묶기
+  const nameSet = new Set(names)
+  const used = new Set()
+  const groups = []
+  for (const name of names) {
+    if (used.has(name)) continue
+    used.add(name)
+    const partner = coupleOf.get(name)
+    if (partner && nameSet.has(partner) && !used.has(partner)) {
+      used.add(partner)
+      groups.push([name, partner])
+    } else {
+      groups.push([name])
+    }
+  }
+  // 2) 큰 그룹(커플)부터 인원이 가장 적은 팀에 배정 — 팀별 인원 차이 최소화
+  const sizes = Array(teamCount).fill(0)
+  const result = []
+  for (const group of shuffle(groups).sort((a, b) => b.length - a.length)) {
+    const min = Math.min(...sizes)
+    const candidates = sizes.flatMap((s, i) => (s === min ? [i] : []))
+    const teamIdx = candidates[Math.floor(Math.random() * candidates.length)]
+    sizes[teamIdx] += group.length
+    for (const name of group) result.push({ name, teamIdx })
+  }
+  // 3) 공개 순서는 다시 섞기 (커플이 연달아 나오지 않게)
+  return shuffle(result)
 }
 
 // 카드 등장 빵빠레 — 화면 하단 양쪽 꼭지점에서 발사 (canvas-confetti)
@@ -82,6 +106,16 @@ export default function TeamSetup({ go }) {
   const roster = useMemo(() => getRoster(), [])
   const rosterNames = useMemo(() => roster.map((p) => p.name), [roster])
   const rosterMap = useMemo(() => new Map(roster.map((p) => [p.name, p])), [roster])
+  // 커플 양방향 맵 — players.json에 한쪽만 적어도 동작
+  const coupleOf = useMemo(() => {
+    const m = new Map()
+    for (const p of roster) {
+      if (!p.couple) continue
+      m.set(p.name, p.couple)
+      if (!m.has(p.couple)) m.set(p.couple, p.name)
+    }
+    return m
+  }, [roster])
 
   const [step, setStep] = useState('roster')
   const [manualNames, setManualNames] = useState(() => getPlayers())
@@ -159,7 +193,7 @@ export default function TeamSetup({ go }) {
                         : 'bg-neutral-900 border-neutral-700 text-neutral-400 hover:border-neutral-500'
                     }`}
                   >
-                    {p.name}{p.grade === '전설' && ' ✨'}
+                    {p.name}{p.grade === 'legend' && ' ✨'}
                   </button>
                 )
               })}
@@ -252,7 +286,7 @@ export default function TeamSetup({ go }) {
               🫳 직접 픽
             </button>
             <button
-              onClick={() => { setAssignment(randomAssignment(names, teamCount)); setRevealKey((k) => k + 1); setStep('reveal') }}
+              onClick={() => { setAssignment(randomAssignment(names, teamCount, coupleOf)); setRevealKey((k) => k + 1); setStep('reveal') }}
               disabled={!canStart}
               className="py-4 rounded-2xl bg-amber-600 hover:bg-amber-500 disabled:bg-neutral-800 disabled:text-neutral-500 font-bold transition"
             >
@@ -277,7 +311,7 @@ export default function TeamSetup({ go }) {
         teamCount={teamCount}
         rosterMap={rosterMap}
         onFinish={() => finish(assignment)}
-        onReshuffle={() => { setAssignment(randomAssignment(names, teamCount)); setRevealKey((k) => k + 1) }}
+        onReshuffle={() => { setAssignment(randomAssignment(names, teamCount, coupleOf)); setRevealKey((k) => k + 1) }}
         onBack={() => setStep('roster')}
       />
     )
@@ -401,8 +435,8 @@ function RandomReveal({ assignment, teamNames, teamCount, rosterMap, onFinish, o
   const lastIdx = stages.length - 1
   const arrived = progress >= lastIdx - 0.001
   const tColor = teamColor(cur?.teamIdx ?? 0)
-  const grade = GRADE_STYLE[player?.grade ?? '일반']
-  const isLegend = player?.grade === '전설'
+  const grade = GRADE_STYLE[player?.grade ?? 'normal']
+  const isLegend = player?.grade === 'legend'
 
   // 일정한 속도로 걸어 들어간다 — 카드 앞에 도착하면 멈추고 클릭 대기
   // (progress 리셋은 advance의 다음 사람 분기에서 처리)
