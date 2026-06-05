@@ -11,8 +11,8 @@ export default function Home({ go, library }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center gap-8">
       <div>
-        <h1 className="text-4xl font-bold tracking-tight">🎧 1초 퀴즈</h1>
-        <p className="mt-2 text-neutral-400">노래를 1초만 듣고 제목을 맞춰보세요</p>
+        <h1 className="text-4xl font-bold tracking-tight">🎲 랜덤게임</h1>
+        <p className="mt-2 text-neutral-400">노래 맞추기 · 이미지 맞추기 · 팀 라운드전</p>
       </div>
 
       <div className="w-full flex flex-col gap-3">
