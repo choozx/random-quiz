@@ -9,6 +9,7 @@ import ImageBattleGame from './screens/ImageBattleGame'
 import TeamSetup from './screens/TeamSetup'
 import TournamentSetup from './screens/TournamentSetup'
 import TournamentGame from './screens/TournamentGame'
+import RaceTest from './screens/RaceTest'
 import { useSongLibrary } from './hooks/useSongLibrary'
 
 function App() {
@@ -34,6 +35,7 @@ function App() {
         {screen === 'teamsetup' && <TeamSetup go={go} />}
         {screen === 'tournamentsetup' && <TournamentSetup go={go} options={gameOptions} />}
         {screen === 'tournament' && <TournamentGame go={go} options={gameOptions} />}
+        {screen === 'racetest' && <RaceTest go={go} />}
       </div>
     </div>
   )

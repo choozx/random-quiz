@@ -1,5 +1,6 @@
 import { getSongs, getSongStats } from '../lib/storage'
 import { IMAGES, getCategories } from '../lib/images'
+import { getRoster } from '../lib/players'
 
 export default function Home({ go, library }) {
   const songs = getSongs()
@@ -7,6 +8,7 @@ export default function Home({ go, library }) {
   const ready = songs.length >= 4
   const imageReady = IMAGES.length >= 4
   const categories = getCategories()
+  const raceReady = getRoster().filter((p) => p.photo).length >= 2
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center gap-8">
@@ -36,6 +38,13 @@ export default function Home({ go, library }) {
           className="w-full py-4 rounded-2xl bg-amber-600 hover:bg-amber-500 disabled:bg-neutral-800 disabled:text-neutral-500 font-semibold text-lg transition"
         >
           🏆 라운드전 시작
+        </button>
+        <button
+          onClick={() => go('racetest')}
+          disabled={!raceReady}
+          className="w-full py-3 rounded-2xl bg-neutral-800 hover:bg-neutral-700 disabled:text-neutral-600 font-medium transition"
+        >
+          🏇 얼굴 경마 테스트{!raceReady && ' (사진 2명 이상 필요)'}
         </button>
         <button
           onClick={() => go('settings')}

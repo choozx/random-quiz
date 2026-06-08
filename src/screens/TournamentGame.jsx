@@ -3,6 +3,8 @@ import { getSongs } from '../lib/storage'
 import { getImagesByCategory } from '../lib/images'
 import { useYouTubePlayer } from '../hooks/useYouTubePlayer'
 import { teamColor } from '../lib/teams'
+import { getRoster } from '../lib/players'
+import FaceRaceGame from './FaceRaceGame'
 
 const DEFAULT_TEAMS = [
   { name: 'Player 1', colorIdx: 0, members: [] },
@@ -11,6 +13,9 @@ const DEFAULT_TEAMS = [
 
 const START_SECONDS = 30
 const CUE_RETRY_MS = 4000
+
+// 결승 직전 얼굴 경마 — 1·2·3등 완주자의 소속 팀에 주는 가산점
+const RACE_REWARDS = [4, 2, 1]
 
 const DURATIONS = [
   { ms: 1000,    label: '1초' },
@@ -51,6 +56,8 @@ export default function TournamentGame({ go, options = {} }) {
     [options.teams]
   )
   const songs = useMemo(() => getSongs(), [])
+  // 결승 직전 얼굴 경마 — 사진 있는 참가자 2명 이상일 때만
+  const raceAvailable = useMemo(() => getRoster().filter((p) => p.photo).length >= 2, [])
 
   // 곡은 전체 라운드에서 이어서 소진, 이미지는 카테고리별 풀 유지
   const songOrder = useRef(shuffle(songs))
@@ -209,8 +216,10 @@ export default function TournamentGame({ go, options = {} }) {
       startQuestion(stageIdx, qNo + 1)
     } else if (stageIdx + 1 < stages.length) {
       clearQuestion()
-      setStageIdx(stageIdx + 1)
-      setPhase('intro')
+      const next = stageIdx + 1
+      setStageIdx(next)
+      // 마지막 라운드(결승) 직전이면 얼굴 경마 미니게임을 먼저
+      setPhase(next === stages.length - 1 && raceAvailable ? 'race' : 'intro')
     } else {
       clearQuestion()
       setPhase('done')
@@ -250,6 +259,22 @@ export default function TournamentGame({ go, options = {} }) {
       })}
     </div>
   )
+
+  // --- 결승 직전 미니게임(얼굴 경마) ---
+  if (phase === 'race') {
+    const finishRace = (awards) => {
+      if (Array.isArray(awards) && awards.some((p) => p > 0)) {
+        setScores((prev) => prev.map((s, i) => s + (awards[i] || 0)))
+      }
+      setPhase('intro')
+    }
+    return (
+      <div className="flex-1 flex flex-col">
+        {playerContainer}
+        <FaceRaceGame teams={teams} rewards={RACE_REWARDS} onDone={finishRace} onQuit={() => go('home')} />
+      </div>
+    )
+  }
 
   // --- 라운드 인트로 ---
   if (phase === 'intro') {
