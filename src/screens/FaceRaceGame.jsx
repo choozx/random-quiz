@@ -1,6 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import confetti from 'canvas-confetti'
 import { getRoster } from '../lib/players'
 import { teamColor } from '../lib/teams'
+
+// 우승 빵빠레 — 화면 하단 양쪽 꼭지점에서 발사
+function fireFanfare() {
+  const opts = {
+    particleCount: 110,
+    spread: 70,
+    startVelocity: 58,
+    ticks: 240,
+    gravity: 1.1,
+    scalar: 1.1,
+    colors: ['#fbbf24', '#f43f5e', '#8b5cf6', '#10b981', '#0ea5e9', '#ffffff'],
+  }
+  confetti({ ...opts, angle: 60, origin: { x: 0, y: 1 } })
+  confetti({ ...opts, angle: 120, origin: { x: 1, y: 1 } })
+}
 
 // 결승 직전 운빨 미니게임 — 참가자 얼굴이 말이 되어 랜덤 레이스.
 // 순위(1등~꼴등)만 산출하고 onDone(order)로 넘긴다. 보상 연결은 나중에.
@@ -44,8 +60,8 @@ const IMPULSE_DECAY = 0.88 // 1프레임(60fps)당 임펄스 감쇠율
 // 레인에 깔리는 기믹 아이템 — 말이 밟으면 발동.
 // 등장 가능 구간은 출발지 기준 [20~30%], [60~70%] 두 곳. 구간당 최대 1개.
 const ITEM_ZONES = [
-  [20, 30],
-  [60, 70],
+  [20, 30], // 1차
+  [45, 55], // 2차 — 1차와 필살기(75%)의 중간
 ]
 const ITEM_SPAWN_CHANCE = 0.5 // 각 구간에 기믹이 등장할 확률
 
@@ -113,6 +129,14 @@ export default function FaceRaceGame({ teams = [], rewards = [], onDone, onQuit 
 
   // 루프가 읽는 itemsRef를 items state와 동기화 (setState 없이 ref만 갱신)
   useEffect(() => { itemsRef.current = items }, [items])
+
+  // 전원 완주 → 우승 빵빠레 (두 번 연달아 터뜨림)
+  useEffect(() => {
+    if (phase !== 'done') return
+    fireFanfare()
+    const t = setTimeout(fireFanfare, 600)
+    return () => clearTimeout(t)
+  }, [phase])
 
   // 카운트다운 3 → 2 → 1 → 레이스 (setState는 타이머 콜백 안에서만)
   useEffect(() => {
@@ -306,8 +330,8 @@ export default function FaceRaceGame({ teams = [], rewards = [], onDone, onQuit 
     <div className="relative flex-1 flex flex-col gap-3 py-2">
       {/* 필살기 컷인 — 화면 정지 + 문구 부각 */}
       {cutIn && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm overflow-hidden">
-          <div className="ultimate-streaks absolute inset-0" />
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm overflow-hidden">
+          <div className="ultimate-focus absolute inset-0" />
           <div className="ultimate-cutin relative flex flex-col items-center gap-4 px-6">
             <div className="w-28 h-28 rounded-full overflow-hidden ring-4 ring-amber-400 shadow-[0_0_70px_rgba(251,191,36,0.85)]">
               <img src={cutIn.photo} alt={cutIn.name} className="w-full h-full object-cover" />
@@ -463,7 +487,17 @@ export default function FaceRaceGame({ teams = [], rewards = [], onDone, onQuit 
 
         {phase === 'done' && (
           <div className="flex flex-col items-center gap-4 w-full">
-            <h3 className="text-xl font-bold">🏆 레이스 결과</h3>
+            {/* 우승자 — 큰 얼굴 + 이름 + 빵빠레 */}
+            {order.length > 0 && (
+              <div className="ultimate-cutin flex flex-col items-center gap-2">
+                <p className="text-amber-400 font-black tracking-widest text-sm">🎉 WINNER 🎉</p>
+                <div className="w-28 h-28 rounded-full overflow-hidden ring-4 ring-amber-400 shadow-[0_0_60px_rgba(251,191,36,0.8)]">
+                  <img src={players[order[0]].photo} alt={players[order[0]].name} className="w-full h-full object-cover" />
+                </div>
+                <p className="text-3xl font-black text-amber-300">🏆 {players[order[0]].name}</p>
+              </div>
+            )}
+            <h3 className="text-lg font-bold text-neutral-300 mt-1">레이스 결과</h3>
             <div className="flex flex-col gap-2 w-full max-w-sm">
               {order.map((idx, r) => {
                 const p = players[idx]
