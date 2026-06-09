@@ -81,7 +81,6 @@ export default function TournamentGame({ go, options = {} }) {
 
   // 이미지 문제 상태
   const [blurPx, setBlurPx] = useState(null) // null = 아직 공개 안 함
-  const [showAnswer, setShowAnswer] = useState(false)
 
   const stage = stages[stageIdx]
   const isLast = stageIdx === stages.length - 1
@@ -156,7 +155,6 @@ export default function TournamentGame({ go, options = {} }) {
     setHasPlayed(false)
     setIsPlaying(false)
     setBlurPx(null)
-    setShowAnswer(false)
 
     if (st.kind === 'song') {
       const t = nextSong()
@@ -472,21 +470,12 @@ export default function TournamentGame({ go, options = {} }) {
           </button>
         </div>
 
-        {/* 정답 — 음악은 항상 표시, 이미지는 클릭 전까지 가림 */}
+        {/* 정답 — 사회자가 봐야 하므로 음악·이미지 모두 항상 표시 */}
         <div className="mt-auto pt-4 border-t border-neutral-800 text-center">
           <p className="text-xs text-neutral-500 uppercase tracking-wider mb-1">정답</p>
-          {isSong ? (
-            <p className="text-lg font-bold text-emerald-400">{target?.title ?? '—'}</p>
-          ) : showAnswer ? (
-            <p className="text-lg font-bold text-emerald-400">{target?.answer ?? '—'}</p>
-          ) : (
-            <button
-              onClick={() => setShowAnswer(true)}
-              className="text-sm text-neutral-400 hover:text-neutral-200 underline underline-offset-4"
-            >
-              정답 보기
-            </button>
-          )}
+          <p className="text-lg font-bold text-emerald-400">
+            {(isSong ? target?.title : target?.answer) ?? '—'}
+          </p>
         </div>
 
       </div>

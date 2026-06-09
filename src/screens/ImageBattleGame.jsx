@@ -32,7 +32,6 @@ export default function ImageBattleGame({ go, options = {} }) {
   const [phase, setPhase] = useState('play')
   const [scores, setScores] = useState({ p1: 0, p2: 0 })
   const [blurPx, setBlurPx] = useState(null) // null = 아직 공개 안 함
-  const [showAnswer, setShowAnswer] = useState(false)
 
   const hasRevealed = blurPx !== null
 
@@ -48,7 +47,6 @@ export default function ImageBattleGame({ go, options = {} }) {
     setTarget(nextImage())
     setRoundNo(n)
     setBlurPx(null)
-    setShowAnswer(false)
   }, [nextImage])
 
   useEffect(() => {
@@ -215,19 +213,10 @@ export default function ImageBattleGame({ go, options = {} }) {
           </button>
         </div>
 
-        {/* 정답 — 화면을 다 같이 보므로 누르기 전엔 가려둔다 */}
+        {/* 정답 — 사회자가 봐야 하므로 항상 표시 */}
         <div className="mt-auto pt-4 border-t border-neutral-800 text-center">
           <p className="text-xs text-neutral-500 uppercase tracking-wider mb-1">정답</p>
-          {showAnswer ? (
-            <p className="text-lg font-bold text-emerald-400">{target?.answer ?? '—'}</p>
-          ) : (
-            <button
-              onClick={() => setShowAnswer(true)}
-              className="text-sm text-neutral-400 hover:text-neutral-200 underline underline-offset-4"
-            >
-              정답 보기
-            </button>
-          )}
+          <p className="text-lg font-bold text-emerald-400">{target?.answer ?? '—'}</p>
         </div>
 
       </div>
